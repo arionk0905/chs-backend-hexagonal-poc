@@ -1,0 +1,42 @@
+{
+  "messageId": "CHS-CORE-001",
+  "version": "1.0",
+  "status": "POC_SAMPLE",
+  "name": "상품 기본정보 조회",
+  "transport": {
+    "method": "POST",
+    "path": "/core/v1/product-inquiries",
+    "contentType": "application/json",
+    "httpStatus": 200
+  },
+  "request": {
+    "header": {
+      "messageId": "CHS-CORE-001",
+      "version": "1.0",
+      "requestId": "c81a448e-0b3b-4a9b-85c4-597f9d9ff1de"
+    },
+    "body": {
+      "productCode": "SAMPLE-DEPOSIT"
+    }
+  },
+  "successResponse": {
+    "header": {
+      "messageId": "CHS-CORE-001",
+      "version": "1.0",
+      "requestId": "c81a448e-0b3b-4a9b-85c4-597f9d9ff1de"
+    },
+    "resultCode": "0000",
+    "body": {
+      "productCode": "SAMPLE-DEPOSIT",
+      "productName": "POC 예금 상품"
+    }
+  },
+  "missingProductResponse": {
+    "header": {
+      "messageId": "CHS-CORE-001",
+      "version": "1.0",
+      "requestId": "c81a448e-0b3b-4a9b-85c4-597f9d9ff1de"
+    },
+    "resultCode": "1001"
+  }
+}

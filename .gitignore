@@ -1,0 +1,6 @@
+.gradle/
+build/
+/out/
+.idea/
+*.sqlite3
+*.sqlite3-*
