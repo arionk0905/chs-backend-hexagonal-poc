@@ -17,7 +17,21 @@ Java 17 이상, Spring Boot 4.1.2, Gradle Wrapper를 사용하는 단일 프로�
 
 `product`, `request` 패키지 아래에 각각 `domain`, `application`, `adapter`가 있습니다. Domain은 상품 코드 형식과 접수 제목의 규칙을 정의합니다. Application은 도메인 모델을 사용하고 외부 작업을 자신이 정의한 출력 포트에 요청합니다. Spring은 `config/ChannelConfiguration`에서 포트와 구현체를 연결합니다.
 
-채널 DTO와 EIMS 샘플 전문은 각 어댑터에서 변환합니다. 추후 은행의 MCI 연계 계약이 확정되면 `CoreProductLookup`을 구현하는 어댑터에 전문 변환과 통신을 넣고 설정에서 연결할 수 있습니다. [EIMS 샘플 계약](docs/eims/CHS-CORE-001-v1.0.json)의 필드와 결과 코드는 가상의 PoC 값입니다.
+## MCI·EAI와 EIMS
+
+채널 애플리케이션에서 연계 업무마다 필요한 포트를 정의하고, 해당 시스템의 어댑터를 같은 Spring Boot 프로젝트에 구현합니다.
+
+| 연계 상황 | PoC에서의 위치 |
+|---|---|
+| 채널이 MCI를 통해 계정계 상품을 조회 | `product/adapter/out/core/mci/`에 `MciProductInquiryAdapter`를 두고 `CoreProductLookup` 구현 |
+| 채널이 다른 업무 시스템을 EAI로 직접 호출 | 해당 업무 패키지의 `adapter/out/eai/`에 어댑터를 두고 해당 업무의 출력 포트 구현 |
+| 채널이 EAI에서 이벤트를 수신 | 해당 업무 패키지의 `adapter/in/eai/`에서 전문을 해석해 입력 포트 호출 |
+
+계정계 상품 조회의 연계 경로 예시는 `채널 API → 상품 조회 서비스 → CoreProductLookup → MCI 어댑터 → MCI → 계정계`입니다. 채널이 MCI만 호출하고 MCI 뒤에서 EAI가 연계되는 구성이라면, 채널 코드에 필요한 구현은 MCI 어댑터 하나입니다. MCI 호출 설정, 전문 변환, 결과 코드와 타임아웃 변환은 이 어댑터에 모읍니다.
+
+**EIMS는 이 설계에서 전문 계약의 개발 입력으로 사용합니다.** PRD의 채널 API 계약과 함께 EIMS의 전문 ID·버전, 요청·응답 필드, 인코딩, 결과 코드, 상관관계 ID를 확인하고 전문 타입·변환기·계약 테스트에 반영합니다. 현재 [EIMS 샘플 계약](docs/eims/CHS-CORE-001-v1.0.json)은 데모용 HTTP 전문입니다. MCI·EAI 구현에는 실제 연계 경로와 승인된 전문 계약, 전송 방식이 필요합니다.
+
+**프로젝트 분리 기준은 배포와 재사용 범위입니다.** 채널만 사용하는 어댑터는 현재 프로젝트에 둡니다. 여러 앱이 같은 전문 코덱이나 연계 클라이언트를 공유하면 공통 라이브러리 모듈을 검토합니다. 연계 게이트웨이 또는 여러 팀이 공유하는 스텁 서버를 별도로 배포·운영하는 경우에는 해당 실행 앱을 별도 프로젝트로 관리할 수 있습니다.
 
 ## 실행
 
