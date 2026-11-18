@@ -1,0 +1,23 @@
+services:
+  mariadb:
+    image: mariadb:11.8
+    environment:
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+      MARIADB_ROOT_HOST: localhost
+      MARIADB_DATABASE: ${DB_NAME:-chs_poc}
+      MARIADB_USER: ${DB_USERNAME:-chs}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD for the local PoC}
+    ports:
+      - "127.0.0.1:${DB_PORT:-3306}:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./src/main/resources/db/mariadb/schema.sql:/docker-entrypoint-initdb.d/01-channel-request.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  mariadb-data:
