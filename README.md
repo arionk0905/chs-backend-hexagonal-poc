@@ -4,10 +4,32 @@ Java 17 이상, Spring Boot 4.1.2, Gradle Wrapper를 사용하는 단일 프로�
 
 ## 구조
 
-```text
-채널 API → 입력 어댑터 → 입력 포트 → Application Service → 출력 포트
-                                                            ↑
-                                                 HTTP / 데모 / SQLite 어댑터
+```mermaid
+flowchart TD
+    CLIENT["채널 프론트 또는 API 클라이언트"]
+    subgraph WAS["Spring Boot WAS"]
+        WEB["REST Controller · 입력 어댑터"]
+        REQ["ChannelRequests → ChannelRequestService"]
+        PROD["ProductInquiry → ProductInquiryService"]
+        DOMAIN["Domain · 접수 제목과 상품 코드 규칙"]
+        STORE["ChannelRequestStore · 저장 포트"]
+        CORE["CoreProductLookup · 상품 조회 포트"]
+        JDBC["MariaDbChannelRequestAdapter · JdbcClient"]
+        DEMO["데모 어댑터"]
+        HTTP["HTTP 어댑터"]
+        WEB -->|접수·조회| REQ
+        WEB -->|상품 조회| PROD
+        REQ -.-> DOMAIN
+        PROD -.-> DOMAIN
+        REQ --> STORE --> JDBC
+        PROD --> CORE
+        CORE -->|기본 설정| DEMO
+        CORE -->|core-http 설정| HTTP
+    end
+    CLIENT --> WEB
+    JDBC --> DB["MariaDB"]
+    HTTP --> STUB["테스트용 계정계 HTTP 서버"]
+    EIMS["EIMS 샘플 전문 계약"] -.->|개발 시 참조| HTTP
 ```
 
 | 기능 | 입력 포트 | 서비스 | 출력 포트 | 구현 어댑터 |
