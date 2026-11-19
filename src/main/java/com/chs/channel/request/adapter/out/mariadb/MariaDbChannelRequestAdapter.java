@@ -1,16 +1,17 @@
-package com.chs.channel.request.adapter.out.sqlite;
+package com.chs.channel.request.adapter.out.mariadb;
 
 import com.chs.channel.request.application.port.out.ChannelRequestStore;
 import com.chs.channel.request.domain.ChannelRequest;
-import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-public final class SqliteChannelRequestAdapter implements ChannelRequestStore {
+public final class MariaDbChannelRequestAdapter implements ChannelRequestStore {
     private final JdbcClient jdbc;
 
-    public SqliteChannelRequestAdapter(JdbcClient jdbc) {
+    public MariaDbChannelRequestAdapter(JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -23,7 +24,7 @@ public final class SqliteChannelRequestAdapter implements ChannelRequestStore {
                 .param("id", request.id().toString())
                 .param("subject", request.subject())
                 .param("status", request.status().name())
-                .param("createdAt", request.createdAt().toString())
+                .param("createdAt", LocalDateTime.ofInstant(request.createdAt(), ZoneOffset.UTC))
                 .update();
     }
 
@@ -39,7 +40,7 @@ public final class SqliteChannelRequestAdapter implements ChannelRequestStore {
                         UUID.fromString(row.getString("id")),
                         row.getString("subject"),
                         ChannelRequest.Status.valueOf(row.getString("status")),
-                        Instant.parse(row.getString("created_at"))))
+                        row.getObject("created_at", LocalDateTime.class).toInstant(ZoneOffset.UTC)))
                 .optional();
     }
 }

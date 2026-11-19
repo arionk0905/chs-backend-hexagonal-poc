@@ -2,14 +2,12 @@ spring:
   application:
     name: chs-backend-hexagonal-poc
   datasource:
-    driver-class-name: org.sqlite.JDBC
-    url: "jdbc:sqlite:${SQLITE_DB_PATH:./channel-poc.sqlite3}"
-    hikari:
-      maximum-pool-size: 1
+    url: "${DB_URL:jdbc:mariadb://127.0.0.1:${DB_PORT:3306}/${DB_NAME:chs_poc}}"
+    username: "${DB_USERNAME:chs}"
+    password: "${DB_PASSWORD:}"
   sql:
     init:
-      mode: always
-      schema-locations: classpath:db/sqlite/schema.sql
+      mode: never
   mvc:
     problemdetails:
       enabled: true

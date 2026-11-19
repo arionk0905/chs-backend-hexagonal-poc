@@ -5,7 +5,7 @@ import com.chs.channel.product.adapter.out.core.http.CoreProductHttpAdapter;
 import com.chs.channel.product.application.ProductInquiryService;
 import com.chs.channel.product.application.port.in.ProductInquiry;
 import com.chs.channel.product.application.port.out.CoreProductLookup;
-import com.chs.channel.request.adapter.out.sqlite.SqliteChannelRequestAdapter;
+import com.chs.channel.request.adapter.out.mariadb.MariaDbChannelRequestAdapter;
 import com.chs.channel.request.application.ChannelRequestService;
 import com.chs.channel.request.application.port.in.ChannelRequests;
 import com.chs.channel.request.application.port.out.ChannelRequestStore;
@@ -49,11 +49,12 @@ class ChannelConfiguration {
 
     @Bean
     ChannelRequests channelRequests(ChannelRequestStore store) {
-        return new ChannelRequestService(store, Clock.systemUTC());
+        // Match MariaDB DATETIME(6) so a saved timestamp round-trips through the API.
+        return new ChannelRequestService(store, Clock.tick(Clock.systemUTC(), Duration.ofNanos(1_000)));
     }
 
     @Bean
     ChannelRequestStore channelRequestStore(JdbcClient jdbc) {
-        return new SqliteChannelRequestAdapter(jdbc);
+        return new MariaDbChannelRequestAdapter(jdbc);
     }
 }

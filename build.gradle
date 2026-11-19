@@ -15,9 +15,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-restclient'
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
-    runtimeOnly 'org.xerial:sqlite-jdbc:3.50.3.0'
+    runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-mariadb'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

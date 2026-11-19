@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS channel_request (
+    id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+    subject VARCHAR(120) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    created_at DATETIME(6) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
