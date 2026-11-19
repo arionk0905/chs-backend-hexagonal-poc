@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -28,11 +30,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("core-http")
+@ActiveProfiles("mci-stub")
 @Import(MariaDbTestConfiguration.class)
-class CoreHttpProfileTest {
+class MciStubProfileTest {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final AtomicReference<JsonNode> SENT = new AtomicReference<>();
+    private static final CountDownLatch RELEASE_SLOW_RESPONSE = new CountDownLatch(1);
     private static final HttpServer CORE = startCore();
 
     @Autowired
@@ -41,6 +44,7 @@ class CoreHttpProfileTest {
     @DynamicPropertySource
     static void pointAtStub(DynamicPropertyRegistry properties) {
         properties.add("core.http.base-url", () -> "http://127.0.0.1:" + CORE.getAddress().getPort());
+        properties.add("core.http.read-timeout-ms", () -> 1000);
     }
 
     @AfterAll
@@ -49,12 +53,13 @@ class CoreHttpProfileTest {
     }
 
     @Test
-    void switchesToHttpAndMapsTheSameChannelResponse() throws Exception {
+    void mapsMciResponseToTheChannelProduct() throws Exception {
         mvc.perform(post("/api/v1/core/product-inquiries")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"productCode\":\"SAMPLE-DEPOSIT\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.productName").value("HTTP 계정계 상품"))
+                .andExpect(jsonPath("$.productCode").value("SAMPLE-DEPOSIT"))
+                .andExpect(jsonPath("$.productName").value("POC 예금 상품"))
                 .andExpect(jsonPath("$.header").doesNotExist());
 
         JsonNode request = SENT.get();
@@ -73,6 +78,28 @@ class CoreHttpProfileTest {
                 .andExpect(jsonPath("$.status").value(502));
     }
 
+    @Test
+    void mapsMissingProductToNotFound() throws Exception {
+        mvc.perform(post("/api/v1/core/product-inquiries")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productCode\":\"MISSING\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void mapsStubTimeoutToGatewayTimeout() throws Exception {
+        try {
+            mvc.perform(post("/api/v1/core/product-inquiries")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"productCode\":\"TIMEOUT\"}"))
+                    .andExpect(status().isGatewayTimeout())
+                    .andExpect(jsonPath("$.status").value(504))
+                    .andExpect(jsonPath("$.detail").value("계정계 응답 시간이 초과됐습니다."));
+        } finally {
+            RELEASE_SLOW_RESPONSE.countDown();
+        }
+    }
+
     private static HttpServer startCore() {
         try {
             var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -84,16 +111,25 @@ class CoreHttpProfileTest {
                     }
                     JsonNode request = JSON.readTree(exchange.getRequestBody());
                     String code = request.at("/body/productCode").asString();
+                    if ("TIMEOUT".equals(code)) {
+                        try {
+                            RELEASE_SLOW_RESPONSE.await(5, TimeUnit.SECONDS);
+                        } catch (InterruptedException error) {
+                            Thread.currentThread().interrupt();
+                        }
+                        return;
+                    }
                     var header = request.path("header");
                     if ("MISMATCH".equals(code)) {
                         header = JSON.createObjectNode().put("requestId", UUID.randomUUID().toString());
-                    } else {
+                    } else if ("SAMPLE-DEPOSIT".equals(code)) {
                         SENT.set(request);
                     }
-                    byte[] body = JSON.writeValueAsBytes(Map.of(
-                            "header", header,
-                            "resultCode", "0000",
-                            "body", Map.of("productCode", code, "productName", "HTTP 계정계 상품")));
+                    var payload = "MISSING".equals(code)
+                            ? Map.of("header", header, "resultCode", "1001")
+                            : Map.of("header", header, "resultCode", "0000",
+                                    "body", Map.of("productCode", code, "productName", "POC 예금 상품"));
+                    byte[] body = JSON.writeValueAsBytes(payload);
                     exchange.getResponseHeaders().set("Content-Type", "application/json");
                     exchange.sendResponseHeaders(200, body.length);
                     exchange.getResponseBody().write(body);

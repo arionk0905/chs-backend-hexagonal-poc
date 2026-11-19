@@ -16,7 +16,8 @@ flowchart TD
         CORE["CoreProductLookup · 상품 조회 포트"]
         JDBC["MariaDbChannelRequestAdapter · JdbcClient"]
         DEMO["데모 어댑터"]
-        HTTP["HTTP 어댑터"]
+        MCI["MCI 어댑터 · 전문 생성과 결과 변환"]
+        TRANSPORT["HTTP 스텁 전송부"]
         WEB -->|접수·조회| REQ
         WEB -->|상품 조회| PROD
         REQ -.-> DOMAIN
@@ -24,22 +25,23 @@ flowchart TD
         REQ --> STORE --> JDBC
         PROD --> CORE
         CORE -->|기본 설정| DEMO
-        CORE -->|core-http 설정| HTTP
+        CORE -->|mci-stub 설정| MCI
+        MCI --> TRANSPORT
     end
     CLIENT --> WEB
     JDBC --> DB["MariaDB"]
-    HTTP --> STUB["테스트용 계정계 HTTP 서버"]
-    EIMS["EIMS 샘플 전문 계약"] -.->|개발 시 참조| HTTP
+    TRANSPORT --> STUB["PoC 계정계 스텁"]
+    EIMS["EIMS 샘플 전문 계약"] -.->|개발 시 참조| MCI
 ```
 
 | 기능 | 입력 포트 | 서비스 | 출력 포트 | 구현 어댑터 |
 |---|---|---|---|---|
-| 상품 조회 | `ProductInquiry` | `ProductInquiryService` | `CoreProductLookup` | 데모 데이터 또는 계정계 HTTP |
+| 상품 조회 | `ProductInquiry` | `ProductInquiryService` | `CoreProductLookup` | 데모 또는 MCI 상품 조회 어댑터 |
 | 요청 접수·조회 | `ChannelRequests` | `ChannelRequestService` | `ChannelRequestStore` | MariaDB / JdbcClient |
 
 `product`, `request` 패키지 아래에 각각 `domain`, `application`, `adapter`가 있습니다. Domain은 상품 코드 형식과 접수 제목의 규칙을 정의합니다. Application은 도메인 모델을 사용하고 외부 작업을 자신이 정의한 출력 포트에 요청합니다. Spring은 `config/ChannelConfiguration`에서 포트와 구현체를 연결합니다.
 
-채널 DTO와 EIMS 샘플 전문은 각 어댑터에서 변환합니다. 추후 은행의 MCI 연계 계약이 확정되면 `CoreProductLookup`을 구현하는 어댑터에 전문 변환과 통신을 넣고 설정에서 연결할 수 있습니다. [EIMS 샘플 계약](docs/eims/CHS-CORE-001-v1.0.json)의 필드와 결과 코드는 가상의 PoC 값입니다.
+`MciProductInquiryAdapter`가 `CoreProductLookup`을 구현하고 [EIMS 샘플 계약](docs/eims/CHS-CORE-001-v1.0.json)에 따라 전문 생성과 결과 변환을 맡습니다. PoC에서는 `HttpMciStubTransport`가 샘플 전문을 HTTP로 전달합니다. 실제 MCI 연계는 승인된 전문과 전송 방식이 확정되면 해당 계약을 적용합니다.
 
 ## 실행
 
@@ -77,10 +79,46 @@ curl -i http://127.0.0.1:8080/api/v1/core/product-inquiries \
   --data '{"productCode":"SAMPLE-DEPOSIT"}'
 ```
 
-샘플 계약을 제공하는 계정계 HTTP 스텁이 있다면 같은 채널 API를 다음 설정으로 실행합니다.
+샘플 계약을 제공하는 계정계 스텁을 띄운 상태에서 MCI 어댑터를 사용하려면 다음 설정으로 실행합니다.
 
 ```sh
-SPRING_PROFILES_ACTIVE=core-http CORE_BASE_URL=http://127.0.0.1:8091 ./gradlew bootRun
+SPRING_PROFILES_ACTIVE=mci-stub CORE_BASE_URL=http://127.0.0.1:8091 ./gradlew bootRun
 ```
 
-HTTP 어댑터의 접속 및 응답 타임아웃은 `CORE_CONNECT_TIMEOUT_MS` 및 `CORE_READ_TIMEOUT_MS`로 설정합니다. 채널 API는 정상 조회 `200`, 상품 없음 `404`, 계정계 연결 실패·응답 계약 불일치 `502`, 타임아웃 `504`를 반환합니다. `CoreHttpProfileTest`는 로컬 스텁을 띄워 HTTP 어댑터 선택, 전문 전송 및 채널 응답 변환을 확인합니다.
+스텁 접속 및 응답 타임아웃은 `CORE_CONNECT_TIMEOUT_MS`와 `CORE_READ_TIMEOUT_MS`로 설정합니다. 기존 `core-http` 프로필도 같은 구성을 선택합니다.
+
+### 고객이 상품 조회 결과를 받는 흐름
+
+그림은 `mci-stub` 프로필에서 채널 API 응답이 고객 화면에 표시되는 예입니다. Spring Boot WAS에는 Controller와 업무 서비스가 있고, MCI 어댑터도 같은 WAS 안에서 실행됩니다. 고객 안내 문구와 화면은 연동 예시입니다.
+
+```mermaid
+sequenceDiagram
+    actor C as 고객
+    participant FE as 채널 프론트
+    participant BE as Spring Boot WAS
+    participant MCI as MCI 어댑터
+    participant CORE as 계정계 스텁
+    C->>FE: 상품 상세 선택
+    FE->>BE: POST /api/v1/core/product-inquiries
+    BE->>MCI: CoreProductLookup으로 상품코드 조회
+    MCI->>CORE: CHS-CORE-001 v1.0 샘플 전문 요청
+    alt 상품 조회 성공
+        CORE-->>MCI: 0000과 상품명
+        MCI-->>BE: 채널 상품 모델
+        BE-->>FE: 200과 productCode, productName
+        FE-->>C: POC 예금 상품 상세 표시
+    else 등록된 상품 없음
+        CORE-->>MCI: 1001
+        MCI-->>BE: 상품 없음
+        BE-->>FE: 404
+        FE-->>C: 상품을 찾을 수 없습니다
+    else 응답 계약 불일치 또는 타임아웃
+        MCI-->>BE: 연계 오류
+        BE-->>FE: 502 또는 504
+        FE-->>C: 조회 실패 안내
+    end
+```
+
+조회 성공 시 채널 프론트에는 `{"productCode":"SAMPLE-DEPOSIT","productName":"POC 예금 상품"}`이 반환됩니다. 입력 형식 오류는 `400`, 상품 없음은 `404`, 계정계 연결 실패·응답 계약 불일치는 `502`, 타임아웃은 `504`입니다.
+
+`MciStubProfileTest`는 계정계 역할의 로컬 HTTP 스텁을 띄워 전문 요청, 채널 성공 응답, 상품 없음, 전문 불일치, 타임아웃을 검증합니다.

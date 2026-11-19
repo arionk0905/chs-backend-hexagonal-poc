@@ -1,7 +1,8 @@
 package com.chs.channel.config;
 
 import com.chs.channel.product.adapter.out.core.DemoCoreProductAdapter;
-import com.chs.channel.product.adapter.out.core.http.CoreProductHttpAdapter;
+import com.chs.channel.product.adapter.out.core.mci.HttpMciStubTransport;
+import com.chs.channel.product.adapter.out.core.mci.MciProductInquiryAdapter;
 import com.chs.channel.product.application.ProductInquiryService;
 import com.chs.channel.product.application.port.in.ProductInquiry;
 import com.chs.channel.product.application.port.out.CoreProductLookup;
@@ -28,14 +29,14 @@ class ChannelConfiguration {
     }
 
     @Bean
-    @Profile("!core-http")
+    @Profile("!mci-stub & !core-http")
     CoreProductLookup demoCore() {
         return new DemoCoreProductAdapter();
     }
 
     @Bean
-    @Profile("core-http")
-    CoreProductLookup httpCore(
+    @Profile({"mci-stub", "core-http"})
+    CoreProductLookup mciCore(
             RestClient.Builder builder,
             @Value("${core.http.base-url}") String baseUrl,
             @Value("${core.http.connect-timeout-ms}") long connectTimeoutMs,
@@ -44,7 +45,7 @@ class ChannelConfiguration {
         var requestFactory = new JdkClientHttpRequestFactory(transport);
         requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
         var client = builder.baseUrl(baseUrl).requestFactory(requestFactory).build();
-        return new CoreProductHttpAdapter(client);
+        return new MciProductInquiryAdapter(new HttpMciStubTransport(client));
     }
 
     @Bean
